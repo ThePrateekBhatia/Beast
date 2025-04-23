@@ -38,10 +38,16 @@ SERVICES = {
 async def lifespan(app: FastAPI):
     global aria2, qbittorrent
     aria2 = Aria2HttpClient("http://localhost:6800/jsonrpc")
-    qbittorrent = await create_client("http://localhost:8090/api/v2/")
+    # Try to connect to qBittorrent, but fail gracefully if not available
+    try:
+        qbittorrent = await create_client("http://localhost:8090/api/v2/")
+    except Exception as e:
+        LOGGER.warning(f"qBittorrent unavailable: {e}")
+        qbittorrent = None
     yield
     await aria2.close()
-    await qbittorrent.close()
+    if qbittorrent:
+        await qbittorrent.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -337,3 +343,9 @@ async def page_not_found(_, exc):
         f"<h1>404: Task not found! Mostly wrong input. <br><br>Error: {exc}</h1>",
         status_code=404,
     )
+
+
+# Health check endpoint for Koyeb
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
